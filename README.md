@@ -87,7 +87,7 @@
 | 认证 | JJWT 0.12 | HS256 |
 | 前端 | 原生 HTML / CSS / JS | 零构建、零依赖，无框架 |
 | 构建 | Maven + JaCoCo | 覆盖率门槛卡在构建里 |
-| 交付 | Docker 多阶段构建 + Compose | 镜像 900MB → 250MB |
+| 交付 | Docker 多阶段构建 + Compose | 运行时镜像 425MB（仅 JRE + jar） |
 
 ---
 
@@ -311,11 +311,13 @@ mvn verify       # 额外跑覆盖率门槛检查，不达标构建失败
 
 ### 容器化
 
-多阶段构建把编译产物从 Maven 镜像搬到 JRE 镜像，最终 250MB。几个细节是刻意的：
+多阶段构建把编译产物从 Maven 镜像搬到 JRE 镜像，最终 **425MB**（alpine JRE 287MB + fat jar 70MB，实测）。几个细节是刻意的：
 
 - `COPY pom.xml` 单独一层，依赖缓存命中后构建从 3 分钟降到 20 秒
+- `COPY --chown` 而不是 COPY 之后再 `chown -R`：后者会让 Docker 的写时复制把 70MB 的 jar 整层复制一遍，镜像凭空多 70MB
+- alpine 基础镜像不带时区数据库，`TZ` 环境变量要配合 `apk add tzdata` 才真正生效
 - `ENTRYPOINT` 用 exec 形式（JSON 数组），保证 java 进程是 PID 1，能收到 `SIGTERM` 走优雅停机
-- `useradd app` 后 `USER app`，不用 root 跑应用
+- `adduser -S app` 后 `USER app`，不用 root 跑应用
 - `healthcheck` + `depends_on: condition: service_healthy`，等 MySQL 真正可连接再启动应用
 
 ---

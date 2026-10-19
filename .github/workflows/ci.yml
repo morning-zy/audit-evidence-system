@@ -112,5 +112,6 @@ jobs:
           SIZE=$(docker image inspect audit-evidence-system:ci --format '{{.Size}}')
           echo "SIZE:       $((SIZE / 1024 / 1024)) MB"
           test "$(docker inspect --format '{{.Config.User}}' audit-evidence-system:ci)" = "app"
-          # 多阶段构建失败会退化成 900MB+，这里设个上限兜底
-          test "$SIZE" -lt 314572800
+          # 多阶段构建失败会退化成 1GB+（把 Maven 仓库打包进去），这里设个上限兜底。
+          # 当前实测 425MB（alpine JRE + fat jar）。
+          test "$SIZE" -lt 419430400

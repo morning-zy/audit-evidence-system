@@ -4,7 +4,7 @@
 # 为什么分两个阶段（面试常问）：
 #   编译需要完整 JDK + Maven（约 700MB），运行只需要 JRE（约 180MB）。
 #   如果合成一个镜像，最终交付物里会塞满编译工具链和 Maven 本地仓库，
-#   镜像体积从 ~250MB 膨胀到 1GB 以上，拉取和部署都变慢。
+#   镜像体积会从 ~350MB 膨胀到 1GB 以上，拉取和部署都变慢。
 #   多阶段构建让"编译产物"跨阶段传递，运行阶段从干净的 JRE 镜像开始。
 #
 # COPY pom.xml 单独一行的用意（这是缓存优化）：
@@ -27,24 +27,34 @@ COPY src ./src
 RUN mvn -B clean package -DskipTests
 
 # ---------- 阶段二：运行 ----------
-FROM eclipse-temurin:21-jre
+# 用 alpine（musl）版本而不是 ubuntu 版本：
+#   eclipse-temurin:21-jre        461MB
+#   eclipse-temurin:21-jre-alpine 287MB
+# 应用是纯 Java（无 native 依赖），musl 与 glibc 的差异不影响运行。
+FROM eclipse-temurin:21-jre-alpine
 
 # 时区：容器默认 UTC，不改的话日志时间和业务时间会差 8 小时
-# 对审计系统来说这是硬伤 —— 底稿时间必须和现场一致
+# 对审计系统来说这是硬伤 —— 底稿时间必须和现场一致。
+# alpine 不自带时区数据库，只设 TZ 环境变量不生效，必须装 tzdata。
 ENV TZ=Asia/Shanghai
 ENV LANG=C.UTF-8
 
+RUN apk add --no-cache tzdata
+
 # 不用 root 跑应用。容器里默认是 root，一旦容器被攻破，
 # 攻击者拿到的就是容器内最高权限。创建普通用户是基本的安全实践。
-RUN groupadd -r app && useradd -r -g app app
+# alpine 用 BusyBox 的 addgroup/adduser，参数与 shadow-utils 不同。
+RUN addgroup -S app && adduser -S -G app app
 
 WORKDIR /app
 
-# 从编译阶段只取 jar 产物
-COPY --from=build /build/target/*.jar app.jar
-
-# 日志目录，挂载卷时用
+# 先把目录和属主准备好，再拷 jar —— 顺序不能反。
+# 如果先 COPY 再 chown -R，Docker 的写时复制会把 70MB 的 jar
+# 整个复制成新的一层，镜像凭空多出 70MB。这是镜像瘦身最常见的坑。
 RUN mkdir -p /app/logs && chown -R app:app /app
+
+# 从编译阶段只取 jar 产物；--chown 直接带上属主，不再额外起层
+COPY --from=build --chown=app:app /build/target/*.jar app.jar
 
 USER app
 
