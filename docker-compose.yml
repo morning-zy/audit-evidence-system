@@ -1,0 +1,113 @@
+# ============================================================
+# 一键启动整套审计证据管理系统
+#
+#   docker compose up -d      启动全部（首次会构建镜像，约 3-5 分钟）
+#   docker compose ps         查看状态
+#   docker compose logs -f app 跟踪应用日志
+#   docker compose down       停止（保留数据）
+#   docker compose down -v    停止并清空数据（数据库重置）
+#
+# 访问：http://localhost:8090/api/ui
+# 账号：admin / 123456
+# ============================================================
+
+services:
+  # ---------- MySQL ----------
+  mysql:
+    image: mysql:8.0
+    container_name: audit-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-123456}
+      MYSQL_DATABASE: audit_evidence
+      TZ: Asia/Shanghai
+    ports:
+      # 只映射到宿主机本地回环，避免数据库端口暴露到局域网
+      - "127.0.0.1:3307:3306"
+    volumes:
+      # 建表脚本 + 初始化数据。
+      # /docker-entrypoint-initdb.d 是 MySQL 官方镜像的约定目录：
+      # 容器首次启动且数据目录为空时，会按文件名字典序执行里面的 .sql。
+      # 注意 schema.sql 开头有 DROP DATABASE，只在空库时执行，不会误删生产数据。
+      - ./src/main/resources/db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - ./src/main/resources/db/data.sql:/docker-entrypoint-initdb.d/02-data.sql:ro
+      # 命名卷：数据落在 Docker 管理的卷里，删容器不丢数据
+      - mysql-data:/var/lib/mysql
+    command:
+      # 字符集显式指定，否则中文在部分镜像版本下会变问号
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_general_ci
+      - --default-time-zone=+08:00
+    healthcheck:
+      # 应用必须等 MySQL 真正可连接，不能只靠 depends_on 的"容器已启动"
+      # 因为 MySQL 容器启动后还要几十秒初始化，这期间端口是不通的
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-p${DB_PASSWORD:-123456}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+    networks:
+      - audit-net
+
+  # ---------- Redis ----------
+  redis:
+    image: redis:7-alpine
+    container_name: audit-redis
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:6380:6379"
+    volumes:
+      # 开启 AOF 持久化：缓存里存的是项目统计，丢了能重建，
+      # 但分布式锁和空值缓存丢失会导致瞬时穿透，所以还是持久化
+      - redis-data:/data
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --maxmemory
+      - 256mb
+      - --maxmemory-policy
+      - allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - audit-net
+
+  # ---------- 应用 ----------
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: audit-app
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        # 这是关键：等 MySQL 健康检查通过再启动应用，
+        # 否则应用会因连不上库而启动失败并反复重启
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      DB_HOST: mysql
+      DB_PORT: "3306"
+      DB_NAME: audit_evidence
+      DB_PASSWORD: ${DB_PASSWORD:-123456}
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      TZ: Asia/Shanghai
+    ports:
+      - "8090:8090"
+    networks:
+      - audit-net
+
+volumes:
+  mysql-data:
+  redis-data:
+
+networks:
+  audit-net:
+    driver: bridge

@@ -1,0 +1,53 @@
+# =====================================================================
+# Docker 环境配置
+#
+# 为什么单独建这个文件，而不是复用 application-dev.yml：
+#   dev 里写死了 127.0.0.1 和虚拟机的 192.168.56.128。
+#   容器是独立网络命名空间，127.0.0.1 指的是容器自己，
+#   虚拟机 IP 在宿主机上能通、容器里不一定通。
+#   所以容器化必须用「服务名」寻址：mysql、redis 由 compose 的 DNS 解析。
+#
+# 所有敏感值都走环境变量，不写进文件 —— 这个文件可以安全提交到 Git。
+# =====================================================================
+spring:
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    # 注意 host 是 mysql（compose 里定义的服务名），不是 127.0.0.1
+    # allowPublicKeyRetrieval=true：MySQL 8 默认 caching_sha2_password 认证，
+    # 非 SSL 连接下首次握手需要取公钥，不加这个会报 "Public Key Retrieval is not allowed"
+    url: jdbc:mysql://${DB_HOST:mysql}:${DB_PORT:3306}/${DB_NAME:audit_evidence}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true&rewriteBatchedStatements=true
+    username: ${DB_USER:root}
+    password: ${DB_PASSWORD:123456}
+    hikari:
+      minimum-idle: 5
+      maximum-pool-size: 20
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+      pool-name: AuditHikariPool
+
+  data:
+    redis:
+      # 同样用服务名 redis
+      host: ${REDIS_HOST:redis}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      database: 0
+      timeout: 3000ms
+      lettuce:
+        pool:
+          max-active: 16
+          max-idle: 8
+          min-idle: 2
+          max-wait: 3000ms
+
+# 容器里不需要暴露 Swagger 给外网，由环境变量控制
+springdoc:
+  api-docs:
+    enabled: ${API_DOCS_ENABLED:true}
+
+logging:
+  # 容器里日志写标准输出，交给 docker logs 收集，不要写文件
+  # 这是 12-Factor App 的原则：日志由运行环境接管，应用只负责输出
+  file:
+    name: ""

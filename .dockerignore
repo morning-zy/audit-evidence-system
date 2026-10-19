@@ -1,0 +1,35 @@
+# 构建上下文里不需要的东西，全部排除
+#
+# 为什么重要：docker build 会把整个目录当上下文发给守护进程。
+# 不排除的话，target/（打包产物）、.idea/（IDE 配置）、.git/（完整历史）
+# 都会被打包上传，构建变慢还可能把本地配置泄露进镜像。
+# 镜像应该只包含"构建所需的最小集合"。
+
+# 构建产物
+target/
+*.jar
+*.original
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# 版本控制
+.git/
+.gitignore
+.gitattributes
+
+# 文档与测试脚本（运行镜像里用不到）
+docs/
+README.md
+*.md
+
+# 本地环境配置（含密码）
+src/main/resources/application-dev.yml
+src/main/resources/application-*-local.yml
+
+# 系统文件
+.DS_Store
+Thumbs.db
+*.log
