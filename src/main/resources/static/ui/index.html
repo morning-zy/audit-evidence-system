@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>审计证据管理系统</title>
+    <link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+
+<!-- ==================================================================
+     登录页
+     ================================================================== -->
+<div id="login-view">
+    <div class="login-brand">
+        <div class="brand-mark">
+            <div class="brand-logo">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                    <path d="M8 1.5L13.5 4v4c0 3.2-2.3 5.6-5.5 6.5C4.8 13.6 2.5 11.2 2.5 8V4L8 1.5z"
+                          stroke="#2dd4a7" stroke-width="1.3" stroke-linejoin="round"/>
+                    <path d="M5.8 8.1l1.5 1.5 3-3.1" stroke="#2dd4a7" stroke-width="1.4"
+                          stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+            </div>
+            <div>
+                <div class="brand-name">审计证据管理系统</div>
+                <div class="brand-sub">Audit Evidence Platform</div>
+            </div>
+        </div>
+
+        <div class="login-hero">
+            <h1>让每一条审计证据<br>都有<em>来处</em>，也有<em>去处</em></h1>
+            <p>项目—事项—证据三级归属，编制与复核强制分离，每一次状态变更都留痕可追溯。
+                这不是一个增删改查的练习项目，而是按审计实务的底稿逻辑搭起来的执行平台。</p>
+
+            <div class="login-points">
+                <div class="login-point">
+                    <div class="dot-idx">01</div>
+                    <div><b>三级归属</b>　审计项目 → 审计事项 → 审计证据，对齐底稿编制习惯</div>
+                </div>
+                <div class="login-point">
+                    <div class="dot-idx">02</div>
+                    <div><b>状态机管控</b>　草稿 → 待复核 → 已确认 / 已驳回，非法流转直接拒绝</div>
+                </div>
+                <div class="login-point">
+                    <div class="dot-idx">03</div>
+                    <div><b>编制复核分离</b>　提交人不能复核自己的证据，这是准则的硬要求</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="login-foot">Spring Boot 3.5 · MyBatis-Plus · MySQL 8 · Redis</div>
+    </div>
+
+    <div class="login-panel">
+        <div class="login-form">
+            <h2>登录</h2>
+            <p class="hint">选择下方任一演示账号，自动填充并可一键登录</p>
+
+            <div class="account-list" id="account-list"></div>
+
+            <form id="login-form" autocomplete="off">
+                <div class="field">
+                    <label for="username">用户名</label>
+                    <input type="text" id="username" placeholder="admin" autocomplete="username">
+                </div>
+                <div class="field">
+                    <label for="password">密码</label>
+                    <input type="password" id="password" placeholder="123456" autocomplete="current-password">
+                </div>
+                <button type="submit" class="btn btn-primary btn-block" id="login-btn">登录系统</button>
+            </form>
+
+            <p style="margin-top:18px;font-size:11.5px;color:var(--tx-3);line-height:1.7">
+                首个启动需先在 MySQL 中执行 <span class="mono">db/schema.sql</span> 与 <span class="mono">db/data.sql</span>。
+            </p>
+        </div>
+    </div>
+</div>
+
+<!-- ==================================================================
+     主体
+     ================================================================== -->
+<div id="app-view" class="hidden">
+    <aside class="sidebar">
+        <div class="sidebar-head">
+            <div class="brand-logo">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                    <path d="M8 1.5L13.5 4v4c0 3.2-2.3 5.6-5.5 6.5C4.8 13.6 2.5 11.2 2.5 8V4L8 1.5z"
+                          stroke="#2dd4a7" stroke-width="1.3" stroke-linejoin="round"/>
+                    <path d="M5.8 8.1l1.5 1.5 3-3.1" stroke="#2dd4a7" stroke-width="1.4"
+                          stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+            </div>
+            <div class="brand-txt">
+                <div class="brand-name">审计证据</div>
+                <div class="brand-sub" style="font-size:9.5px">Evidence Platform</div>
+            </div>
+        </div>
+        <nav class="nav" id="nav"></nav>
+        <div class="sidebar-foot">
+            <div class="user-card">
+                <div class="avatar" id="u-avatar">--</div>
+                <div class="user-meta">
+                    <div class="nm" id="u-name">--</div>
+                    <div class="rl" id="u-role">--</div>
+                </div>
+            </div>
+            <button class="btn btn-sm btn-ghost" id="logout-btn"
+                    style="width:100%;margin-top:9px;justify-content:flex-start">
+                <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+                    <path d="M6.5 2.5H3.5a1 1 0 00-1 1v9a1 1 0 001 1h3M10.5 5.5L13 8l-2.5 2.5M13 8H6.5"
+                          stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                退出登录
+            </button>
+        </div>
+    </aside>
+
+    <div class="main">
+        <header class="topbar">
+            <div class="crumb" id="crumb"></div>
+            <div class="topbar-right">
+                <span class="pill"><span class="dot"></span><span id="clock">--:--:--</span></span>
+                <a class="btn btn-sm btn-ghost" href="/api/swagger-ui.html" target="_blank"
+                   style="height:24px;font-size:11px;color:var(--tx-3)">接口文档</a>
+            </div>
+        </header>
+        <main class="content" id="content"></main>
+    </div>
+</div>
+
+<!-- 抽屉 / 模态 / Toast 挂载点 -->
+<div id="drawer-host"></div>
+<div id="modal-host"></div>
+<div id="toast-host"></div>
+
+<script src="js/api.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
