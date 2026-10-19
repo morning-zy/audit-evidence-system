@@ -1,0 +1,116 @@
+name: CI
+
+# 只在主分支和 PR 上跑，避免每次推临时分支都消耗额度
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  # 同一个 PR 连续推送时，取消上一次未跑完的构建
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build & Test (JDK 21)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      # mvn verify 比 mvn test 多一步：执行 JaCoCo 覆盖率门槛检查
+      # 行覆盖低于 50% 或分支低于 45% 会直接失败，防止新代码零测试合入
+      - name: Build and verify
+        run: mvn -B --no-transfer-progress verify
+
+      - name: Summarize test results
+        if: always()
+        run: |
+          python3 - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import glob, xml.etree.ElementTree as ET
+          tests = failures = errors = skipped = 0
+          for f in glob.glob('target/surefire-reports/TEST-*.xml'):
+              r = ET.parse(f).getroot()
+              tests += int(r.get('tests', 0))
+              failures += int(r.get('failures', 0))
+              errors += int(r.get('errors', 0))
+              skipped += int(r.get('skipped', 0))
+          print('## 测试结果\n')
+          print(f'| 指标 | 数值 |')
+          print(f'|---|---|')
+          print(f'| 用例总数 | {tests} |')
+          print(f'| 失败 | {failures} |')
+          print(f'| 错误 | {errors} |')
+          print(f'| 跳过 | {skipped} |')
+          print(f'| 结论 | {"✅ 全部通过" if failures == 0 and errors == 0 else "❌ 存在失败"} |')
+          PY
+
+      - name: Upload JaCoCo report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jacoco-report
+          path: target/site/jacoco
+          retention-days: 14
+
+      - name: Upload surefire reports on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: surefire-reports
+          path: |
+            target/surefire-reports
+          retention-days: 7
+
+  docker:
+    name: Docker Image Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: build
+    # 只在主分支跑：PR 阶段没必要重复验证镜像可构建
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # 只构建不推送：验证多阶段 Dockerfile 是可用的
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          load: true
+          tags: audit-evidence-system:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Inspect image
+        run: |
+          # 镜像应该：① 用 exec 形式的 ENTRYPOINT（PID 1 能收到 SIGTERM）
+          #          ② 以非 root 用户运行  ③ 体积控制在 300MB 以内
+          echo "ENTRYPOINT: $(docker inspect --format '{{json .Config.Entrypoint}}' audit-evidence-system:ci)"
+          echo "USER:       $(docker inspect --format '{{.Config.User}}' audit-evidence-system:ci)"
+          SIZE=$(docker image inspect audit-evidence-system:ci --format '{{.Size}}')
+          echo "SIZE:       $((SIZE / 1024 / 1024)) MB"
+          test "$(docker inspect --format '{{.Config.User}}' audit-evidence-system:ci)" = "app"
+          # 多阶段构建失败会退化成 900MB+，这里设个上限兜底
+          test "$SIZE" -lt 314572800
