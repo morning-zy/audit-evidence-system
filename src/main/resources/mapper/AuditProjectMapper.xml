@@ -1,0 +1,121 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.maning.audit.mapper.AuditProjectMapper">
+
+    <!--
+      公共 SQL 片段
+      说明: 用 <sql> 抽公共列，避免三个查询里重复写同一坨字段。
+      统计字段用派生表 join 而不是相关子查询，理由见 Mapper 接口注释。
+    -->
+    <sql id="projectColumns">
+        p.id,
+        p.project_code,
+        p.project_name,
+        p.audit_type,
+        p.audited_unit,
+        p.leader_id,
+        p.start_date,
+        p.end_date,
+        p.status,
+        p.risk_level,
+        p.description,
+        p.create_time,
+        u.real_name AS leader_name
+    </sql>
+
+    <sql id="projectStatJoin">
+        LEFT JOIN sys_user u ON u.id = p.leader_id AND u.deleted = 0
+        LEFT JOIN (
+            SELECT project_id,
+                   COUNT(1)                            AS issue_total,
+                   SUM(CASE WHEN status = 2 THEN 1 ELSE 0 END) AS issue_completed
+            FROM audit_issue
+            WHERE deleted = 0
+            GROUP BY project_id
+        ) i ON i.project_id = p.id
+        LEFT JOIN (
+            SELECT project_id,
+                   COUNT(1)                            AS evidence_total,
+                   SUM(CASE WHEN status = 2 THEN 1 ELSE 0 END) AS evidence_confirmed
+            FROM audit_evidence
+            WHERE deleted = 0
+            GROUP BY project_id
+        ) e ON e.project_id = p.id
+    </sql>
+
+    <!-- 分页查询项目列表 -->
+    <select id="selectProjectPage" resultType="com.maning.audit.vo.ProjectVO">
+        SELECT
+            <include refid="projectColumns"/>,
+            IFNULL(i.issue_total, 0)         AS issue_total,
+            IFNULL(i.issue_completed, 0)     AS issue_completed,
+            IFNULL(e.evidence_total, 0)      AS evidence_total,
+            IFNULL(e.evidence_confirmed, 0)  AS evidence_confirmed
+        FROM audit_project p
+        <include refid="projectStatJoin"/>
+        <where>
+            p.deleted = 0
+            <if test="q.keyword != null and q.keyword != ''">
+                AND (p.project_name LIKE CONCAT('%', #{q.keyword}, '%')
+                     OR p.project_code LIKE CONCAT('%', #{q.keyword}, '%')
+                     OR p.audited_unit LIKE CONCAT('%', #{q.keyword}, '%'))
+            </if>
+            <if test="q.status != null">
+                AND p.status = #{q.status}
+            </if>
+            <if test="q.auditType != null and q.auditType != ''">
+                AND p.audit_type = #{q.auditType}
+            </if>
+            <if test="q.riskLevel != null">
+                AND p.risk_level = #{q.riskLevel}
+            </if>
+            <if test="q.auditedUnit != null and q.auditedUnit != ''">
+                AND p.audited_unit LIKE CONCAT('%', #{q.auditedUnit}, '%')
+            </if>
+            <if test="q.beginDate != null">
+                AND p.start_date &gt;= #{q.beginDate}
+            </if>
+            <if test="q.endDate != null">
+                AND p.start_date &lt;= #{q.endDate}
+            </if>
+        </where>
+        ORDER BY p.create_time DESC
+    </select>
+
+    <!-- 项目详情 -->
+    <select id="selectProjectDetail" resultType="com.maning.audit.vo.ProjectVO">
+        SELECT
+            <include refid="projectColumns"/>,
+            IFNULL(i.issue_total, 0)         AS issue_total,
+            IFNULL(i.issue_completed, 0)     AS issue_completed,
+            IFNULL(e.evidence_total, 0)      AS evidence_total,
+            IFNULL(e.evidence_confirmed, 0)  AS evidence_confirmed
+        FROM audit_project p
+        <include refid="projectStatJoin"/>
+        WHERE p.id = #{id} AND p.deleted = 0
+    </select>
+
+    <!-- 看板用：项目进度列表 -->
+    <select id="selectProjectProgress" resultType="com.maning.audit.vo.ProjectVO">
+        SELECT
+            <include refid="projectColumns"/>,
+            IFNULL(i.issue_total, 0)         AS issue_total,
+            IFNULL(i.issue_completed, 0)     AS issue_completed,
+            IFNULL(e.evidence_total, 0)      AS evidence_total,
+            IFNULL(e.evidence_confirmed, 0)  AS evidence_confirmed
+        FROM audit_project p
+        <include refid="projectStatJoin"/>
+        WHERE p.deleted = 0 AND p.status IN (1, 2)
+        ORDER BY p.risk_level DESC, p.create_time DESC
+        LIMIT #{limit}
+    </select>
+
+    <select id="countByStatus" resultType="java.util.Map">
+        SELECT status AS `key`, COUNT(1) AS `value`
+        FROM audit_project
+        WHERE deleted = 0
+        GROUP BY status
+    </select>
+
+</mapper>

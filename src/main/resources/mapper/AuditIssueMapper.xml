@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.maning.audit.mapper.AuditIssueMapper">
+
+    <select id="selectIssuePage" resultType="com.maning.audit.vo.IssueVO">
+        SELECT
+            i.id,
+            i.project_id,
+            p.project_name,
+            i.issue_no,
+            i.issue_title,
+            i.risk_point,
+            i.auditor_id,
+            u.real_name AS auditor_name,
+            i.status,
+            i.evidence_count,
+            i.create_time
+        FROM audit_issue i
+        LEFT JOIN audit_project p ON p.id = i.project_id AND p.deleted = 0
+        LEFT JOIN sys_user u ON u.id = i.auditor_id AND u.deleted = 0
+        <where>
+            i.deleted = 0
+            <if test="q.projectId != null">
+                AND i.project_id = #{q.projectId}
+            </if>
+            <if test="q.status != null">
+                AND i.status = #{q.status}
+            </if>
+            <if test="q.auditorId != null">
+                AND i.auditor_id = #{q.auditorId}
+            </if>
+            <if test="q.keyword != null and q.keyword != ''">
+                AND (i.issue_title LIKE CONCAT('%', #{q.keyword}, '%')
+                     OR i.issue_no LIKE CONCAT('%', #{q.keyword}, '%'))
+            </if>
+        </where>
+        ORDER BY i.create_time DESC
+    </select>
+
+    <select id="selectByProjectId" resultType="com.maning.audit.vo.IssueVO">
+        SELECT
+            i.id,
+            i.project_id,
+            i.issue_no,
+            i.issue_title,
+            i.auditor_id,
+            u.real_name AS auditor_name,
+            i.status,
+            i.evidence_count
+        FROM audit_issue i
+        LEFT JOIN sys_user u ON u.id = i.auditor_id AND u.deleted = 0
+        WHERE i.project_id = #{projectId} AND i.deleted = 0
+        ORDER BY i.issue_no
+    </select>
+
+    <!--
+      原子递增证据计数
+      用 GREATEST(..., 0) 兜住异常情况下的负数，避免计数被减成负值后无法自洽
+    -->
+    <update id="incrEvidenceCount">
+        UPDATE audit_issue
+        SET evidence_count = GREATEST(evidence_count + #{delta}, 0),
+            update_time = NOW()
+        WHERE id = #{id} AND deleted = 0
+    </update>
+
+    <!--
+      取该项目下已用的最大事项编号（故意不加 deleted = 0）
+      编号要按字典序取最大的那个，因为格式是 IS001-01 ~ IS001-99，两位补零后字典序等于数值序。
+      超过 99 条时 %02d 会退化成 3 位，字典序会乱 —— 这在真实审计项目里极少见
+      （一个项目 99 个事项已经非常多了），但知道这个边界在哪比假装没有要好。
+    -->
+    <select id="selectMaxIssueNo" resultType="java.lang.String">
+        SELECT MAX(issue_no)
+        FROM audit_issue
+        WHERE project_id = #{projectId}
+    </select>
+
+</mapper>

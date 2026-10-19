@@ -1,0 +1,151 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.maning.audit.mapper.AuditEvidenceMapper">
+
+    <sql id="evidenceColumns">
+        e.id,
+        e.evidence_no,
+        e.project_id,
+        p.project_name,
+        e.issue_id,
+        i.issue_no,
+        i.issue_title,
+        e.evidence_name,
+        e.evidence_type,
+        e.source,
+        e.reliability,
+        e.source_type,
+        e.acquire_method,
+        e.form_type,
+        e.originality,
+        e.control_effective,
+        e.reliability_basis,
+        e.file_path,
+        e.file_size,
+        e.remark,
+        e.status,
+        e.current_level,
+        e.submit_by,
+        su.real_name AS submit_by_name,
+        e.submit_time,
+        e.review_by,
+        ru.real_name AS review_by_name,
+        e.review_time,
+        e.review_comment,
+        e.create_time
+    </sql>
+
+    <sql id="evidenceJoins">
+        LEFT JOIN audit_project p ON p.id = e.project_id AND p.deleted = 0
+        LEFT JOIN audit_issue   i ON i.id = e.issue_id   AND i.deleted = 0
+        LEFT JOIN sys_user     su ON su.id = e.submit_by AND su.deleted = 0
+        LEFT JOIN sys_user     ru ON ru.id = e.review_by AND ru.deleted = 0
+    </sql>
+
+    <!--
+      证据分页查询
+      onlyMine  -> 只看我提交的
+      todoOnly  -> 待复核待办（只给 ADMIN 看，且排除自己提交的——编制与复核分离）
+
+      注意 WHERE 里的参数全部用 #{}（预编译占位符），不能拼 ${}，
+      否则就是 SQL 注入。${} 只适合拼表名、排序字段这种无法参数化的部分。
+    -->
+    <select id="selectEvidencePage" resultType="com.maning.audit.vo.EvidenceVO">
+        SELECT
+            <include refid="evidenceColumns"/>
+        FROM audit_evidence e
+        <include refid="evidenceJoins"/>
+        <where>
+            e.deleted = 0
+            <if test="q.projectId != null">
+                AND e.project_id = #{q.projectId}
+            </if>
+            <if test="q.issueId != null">
+                AND e.issue_id = #{q.issueId}
+            </if>
+            <if test="q.status != null">
+                AND e.status = #{q.status}
+            </if>
+            <if test="q.evidenceType != null and q.evidenceType != ''">
+                AND e.evidence_type = #{q.evidenceType}
+            </if>
+            <if test="q.reliability != null">
+                AND e.reliability = #{q.reliability}
+            </if>
+            <if test="q.keyword != null and q.keyword != ''">
+                AND (e.evidence_name LIKE CONCAT('%', #{q.keyword}, '%')
+                     OR e.evidence_no LIKE CONCAT('%', #{q.keyword}, '%'))
+            </if>
+            <if test="q.onlyMine != null and q.onlyMine">
+                AND e.submit_by = #{currentUserId}
+            </if>
+            <if test="q.todoOnly != null and q.todoOnly">
+                AND e.status = 1
+                AND e.submit_by &lt;&gt; #{currentUserId}
+            </if>
+        </where>
+        ORDER BY
+            <!-- 待办优先展示待复核的，其余按更新时间倒序 -->
+            <if test="q.todoOnly != null and q.todoOnly">
+                e.submit_time ASC
+            </if>
+            <if test="q.todoOnly == null or !q.todoOnly">
+                e.update_time DESC
+            </if>
+    </select>
+
+    <select id="selectEvidenceDetail" resultType="com.maning.audit.vo.EvidenceVO">
+        SELECT
+            <include refid="evidenceColumns"/>
+        FROM audit_evidence e
+        <include refid="evidenceJoins"/>
+        WHERE e.id = #{id} AND e.deleted = 0
+    </select>
+
+    <select id="countGroupByStatus" resultType="java.util.Map">
+        SELECT CAST(status AS CHAR) AS `key`, COUNT(1) AS `value`
+        FROM audit_evidence
+        WHERE deleted = 0
+        <if test="projectId != null">
+            AND project_id = #{projectId}
+        </if>
+        GROUP BY status
+        ORDER BY status
+    </select>
+
+    <select id="countGroupByType" resultType="java.util.Map">
+        SELECT evidence_type AS `key`, COUNT(1) AS `value`
+        FROM audit_evidence
+        WHERE deleted = 0
+        <if test="projectId != null">
+            AND project_id = #{projectId}
+        </if>
+        GROUP BY evidence_type
+        ORDER BY COUNT(1) DESC
+    </select>
+
+    <select id="selectMaxEvidenceNo" resultType="java.lang.String">
+        SELECT MAX(evidence_no)
+        FROM audit_evidence
+        WHERE evidence_no LIKE CONCAT(#{prefix}, '%')
+    </select>
+
+    <!--
+      FOR UPDATE: 悲观行锁
+      状态流转时必须先锁行再判断状态，否则两个主管同时点"通过"会：
+        T1 读 status=1 -> 判断可流转
+        T2 读 status=1 -> 判断可流转（脏读，因为 T1 还没提交）
+        T1 写 status=2，提交
+        T2 写 status=2，提交
+      结果产生两条重复的流转记录。加 FOR UPDATE 后 T2 会阻塞，等 T1 提交后
+      重新读到 status=2，判断不通过而返回业务异常。
+    -->
+    <select id="selectByIdForUpdate" resultType="com.maning.audit.entity.AuditEvidence">
+        SELECT *
+        FROM audit_evidence
+        WHERE id = #{id} AND deleted = 0
+        FOR UPDATE
+    </select>
+
+</mapper>
