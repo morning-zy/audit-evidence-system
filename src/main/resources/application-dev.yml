@@ -1,0 +1,51 @@
+# =====================================================================
+# 本地开发环境配置（IDE 直接启动 / mvn spring-boot:run）
+#
+# 与 application-docker.yml 的区别只有一个：中间件地址不同。
+#   dev    → 127.0.0.1（中间件跑在宿主机，或用 docker compose 把它们映射到本机端口）
+#   docker → mysql / redis（容器内用 compose 服务名互相寻址）
+#
+# 所有值都写成「环境变量 + 默认值」的形式，因此这个文件可以安全地提交到公开仓库：
+#   - 默认值只是本地演示用的 123456，不含任何真实凭据
+#   - 需要覆盖时不改文件，直接设环境变量（IDE 的 Run Configuration 或 shell export）
+# 这是 12-Factor App 的第三条：配置存在环境里，不存在代码里。
+# =====================================================================
+spring:
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    # allowPublicKeyRetrieval=true：MySQL 8 默认 caching_sha2_password，
+    # 非 SSL 连接下首次握手需要取公钥，不加会报 "Public Key Retrieval is not allowed"
+    # 注意端口是 3307 不是 3306：本项目推荐用 docker compose 起中间件，
+    # compose 把容器内 3306 映射到宿主机 3307（见 docker-compose.yml），
+    # 这样不会和本机已装的 MySQL 抢端口。本机原生 MySQL 请改 DB_PORT=3306。
+    url: jdbc:mysql://${DB_HOST:127.0.0.1}:${DB_PORT:3307}/${DB_NAME:audit_evidence}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true&rewriteBatchedStatements=true
+    username: ${DB_USER:root}
+    password: ${DB_PASSWORD:123456}
+    hikari:
+      # 本地开发不用大连接池，5 个够用且启动快
+      minimum-idle: 2
+      maximum-pool-size: 10
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+      pool-name: AuditHikariPool
+
+  data:
+    redis:
+      # 如果本机没装 Redis，直接 docker compose up -d redis 即可，
+      # compose 已把它映射到宿主机 6380 端口
+      host: ${REDIS_HOST:127.0.0.1}
+      port: ${REDIS_PORT:6380}
+      password: ${REDIS_PASSWORD:}
+      database: 0
+      timeout: 3000ms
+      lettuce:
+        pool:
+          max-active: 16
+          max-idle: 8
+          min-idle: 2
+          max-wait: 3000ms
+
+springdoc:
+  api-docs:
+    enabled: ${API_DOCS_ENABLED:true}

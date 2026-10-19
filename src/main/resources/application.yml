@@ -1,0 +1,88 @@
+# =====================================================================
+# 主配置文件：只放"所有环境通用"的配置
+# 环境差异（数据库地址、Redis 地址、密码）全部下沉到 application-dev.yml
+# 启动时通过 spring.profiles.active 指定环境
+# =====================================================================
+server:
+  # 8080 在本机常被其他服务占用（nginx/其他项目），这里用 8090 避免冲突。
+  # 想改端口只改这一行即可，或者启动时加 --server.port=xxxx
+  port: 8090
+  servlet:
+    context-path: /api
+    encoding:
+      charset: UTF-8
+      force: true
+
+spring:
+  application:
+    name: audit-evidence-system
+  profiles:
+    # 默认走 dev，生产用 java -jar --spring.profiles.active=prod 覆盖
+    active: dev
+
+  # ---------- JSON 序列化 ----------
+  jackson:
+    date-format: yyyy-MM-dd HH:mm:ss
+    time-zone: GMT+8
+    default-property-inclusion: non_null
+    serialization:
+      # Long 类型超过 JS 安全整数范围会精度丢失，MP 的雪花 ID 是 19 位
+      # 这里统一把 Long 序列化成字符串，前端接收更安全
+      write-dates-as-timestamps: false
+
+  # ---------- 文件上传 ----------
+  servlet:
+    multipart:
+      max-file-size: 20MB
+      max-request-size: 50MB
+
+# ---------- MyBatis-Plus ----------
+mybatis-plus:
+  # Mapper XML 位置（本项目基础 CRUD 用纯注解/内置方法，复杂查询才写 XML）
+  mapper-locations: classpath*:/mapper/**/*.xml
+  type-aliases-package: com.maning.audit.entity
+  global-config:
+    banner: false
+    db-config:
+      id-type: assign_id          # 雪花 ID
+      logic-delete-field: deleted # 逻辑删除字段名
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+  configuration:
+    map-underscore-to-camel-case: true  # 数据库 user_name -> Java userName
+    cache-enabled: false                # 二级缓存关掉，统一用 Redis 管缓存
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+
+# ---------- springdoc 接口文档 ----------
+springdoc:
+  swagger-ui:
+    # 访问地址: http://localhost:8090/api/swagger-ui.html
+    path: /swagger-ui.html
+    tags-sorter: alpha
+    operations-sorter: alpha
+    persist-authorization: true   # 刷新页面不用重新填 token
+  api-docs:
+    path: /v3/api-docs
+
+# ---------- 业务自定义配置 ----------
+audit:
+  jwt:
+    # 生产环境必须换成环境变量，不要硬编码
+    secret: ${JWT_SECRET:audit-evidence-system-secret-key-for-hs256-must-be-long-enough}
+    expire-minutes: 120
+    header: Authorization
+    prefix: "Bearer "
+  cache:
+    # 项目统计缓存前缀与过期秒数
+    project-stat-key: "audit:stat:project:"
+    project-stat-ttl: 300
+  file:
+    # 本地存储路径，生产应换 OSS/MinIO
+    upload-dir: ${user.home}/audit-upload
+
+logging:
+  level:
+    com.maning.audit: debug
+    org.springframework.web: info
+  pattern:
+    console: "%d{HH:mm:ss.SSS} %clr(%-5level) %clr(%logger{36}){cyan} - %msg%n"

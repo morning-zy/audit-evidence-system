@@ -1,0 +1,27 @@
+# 统一按 LF 存储，避免 Windows 开发者提交后整个文件显示"被修改"
+* text=auto eol=lf
+
+# Windows 脚本保留 CRLF，否则在某些 cmd 环境下会出问题
+*.bat   text eol=crlf
+*.cmd   text eol=crlf
+*.ps1   text eol=crlf
+*.sh    text eol=lf
+
+# 二进制文件不做换行转换，也不参与 diff
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.ico   binary
+*.jar   binary
+*.woff  binary
+*.woff2 binary
+
+# GitHub 语言统计：把前端算进去，别让仓库被识别成纯 Java
+*.html  linguist-language=HTML
+*.css   linguist-language=CSS
+*.js    linguist-language=JavaScript
+
+# 文档和 SQL 在 diff 里正常显示
+*.md    text
+*.sql   text

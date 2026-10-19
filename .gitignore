@@ -1,0 +1,45 @@
+# ---------- Java / Maven ----------
+target/
+*.class
+*.jar
+*.war
+!.mvn/wrapper/maven-wrapper.jar
+
+# ---------- IDE ----------
+.idea/
+*.iml
+*.iws
+*.ipr
+.vscode/
+.settings/
+.classpath
+.project
+
+# ---------- 日志 ----------
+logs/
+*.log
+
+# ---------- 系统 ----------
+.DS_Store
+Thumbs.db
+
+# ---------- 本地上传文件 ----------
+upload/
+audit-upload/
+
+# ---------- 敏感配置（如你另建了带真实密码的配置文件） ----------
+application-local.yml
+*-secret.yml
+.env
+.env.local
+
+# ---------- 本地验证产物 ----------
+# 数据库备份、抓图临时目录、无头浏览器 profile
+docs/db-backup/
+target/chrome-prof/
+*.pid
+
+# ---------- 构建与覆盖率报告 ----------
+target/
+*.exec
+jacoco.exec
