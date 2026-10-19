@@ -91,4 +91,14 @@ public class OpenApiConfig {
     public GroupedOpenApi logApi() {
         return GroupedOpenApi.builder().group("06-操作日志").pathsToMatch("/log/**").build();
     }
+
+    @Bean
+    public GroupedOpenApi samplingApi() {
+        return GroupedOpenApi.builder().group("07-审计抽样").pathsToMatch("/sampling/**").build();
+    }
+
+    @Bean
+    public GroupedOpenApi variableSamplingApi() {
+        return GroupedOpenApi.builder().group("08-变量抽样").pathsToMatch("/variable-sampling/**").build();
+    }
 }

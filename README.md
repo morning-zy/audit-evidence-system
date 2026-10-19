@@ -103,7 +103,7 @@ docker compose up -d
 
 首次会构建镜像，约 3–5 分钟。等 `docker compose ps` 里三个容器都是 `healthy`（约 40 秒）后访问：
 
-**http://localhost:8090/api/ui** · 账号 `admin` / `123456`
+前端入口：[http://localhost:8090/api/ui](http://localhost:8090/api/ui) ，账号 `admin` / `123456`
 
 ```bash
 docker compose logs -f app    # 跟踪日志
@@ -127,7 +127,7 @@ Windows + Git Bash 下如果 `mvn` 交互异常，用仓库里的包装脚本 `.
 
 ### 接口文档
 
-启动后访问 **http://localhost:8090/api/swagger-ui.html**（48 个接口，支持填 token 调试）。
+启动后访问 [http://localhost:8090/api/swagger-ui.html](http://localhost:8090/api/swagger-ui.html) ，48 个接口，支持点右上角 Authorize 填 token 调试。
 
 ---
 
