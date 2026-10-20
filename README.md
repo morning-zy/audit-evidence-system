@@ -348,7 +348,7 @@ audit-evidence-system/
 │   ├── application-dev.yml    # 本地：127.0.0.1:3307 / 6380
 │   └── application-docker.yml # 容器：compose 服务名寻址
 ├── src/test/java/         # 12 个测试类，267 个用例
-├── docs/                  # 设计文档 + 截图
+├── docs/screenshots/      # 界面截图
 ├── tools/                 # 压测 / 冒烟 / 一致性校验脚本（不参与构建）
 ├── Dockerfile
 ├── docker-compose.yml
@@ -393,21 +393,6 @@ audit-evidence-system/
 - [ ] RBAC 权限模型
 - [ ] Testcontainers 集成测试（替代手工起中间件）
 - [ ] 操作日志异步化 + 审计日志防篡改（哈希链）
-
----
-
-## 文档索引
-
-| 文档 | 内容 |
-|---|---|
-| [三级复核说明](docs/三级复核说明.md) | 状态机设计、并发控制、越权拦截场景 |
-| [审计业务规则说明](docs/审计业务规则说明.md) | 准则 1301 号五原则的量化规则与分档依据 |
-| [审计抽样说明](docs/审计抽样说明.md) | 准则 1314 号：样本量推导、Clopper-Pearson、三种口径 |
-| [变量抽样说明](docs/变量抽样说明.md) | 三种估计法、t 分布推导、零错报处理、方法误用对比 |
-| [性能优化记录](docs/性能优化记录.md) | 压测方法、缓存三大问题的实测数据 |
-| [单元测试说明](docs/单元测试说明.md) | 测试分层策略、覆盖率统计口径 |
-| [Docker 部署说明](docs/Docker部署说明.md) | 镜像构建、编排、国内网络下的踩坑 |
-| [tools/](tools/) | 冒烟、压测、前后端一致性校验脚本 |
 
 ---
 
